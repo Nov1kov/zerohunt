@@ -50,11 +50,17 @@ async fn main() {
 
                 // Убираем префикс "0x" и подсчитываем количество нулей
                 let address_without_prefix = &address[2..];
+                // performance optimization
+                let max_zero_count_value = max_zero_count.load(Ordering::Relaxed);
+                if address_without_prefix.chars().nth(max_zero_count_value) != Some('0') {
+                    total_generated.fetch_add(1, Ordering::SeqCst);
+                    continue;
+                }
                 let zero_count = address_without_prefix.chars().take_while(|&c| c == '0').count();
                 if zero_count >= max_zeros {
                     break;
                 }
-                let max_zero_count_value = max_zero_count.load(Ordering::Relaxed);
+
                 if zero_count > max_zero_count_value {
                     max_zero_count.store(zero_count, Ordering::SeqCst);
 
