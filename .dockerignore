@@ -1,0 +1,5 @@
+debug/
+target/
+Dockerfile
+.idea/
+.gitignore

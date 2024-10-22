@@ -1,0 +1,10 @@
+[package]
+name = "zerohunt"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+rand = "0.8.5"
+ethers = { version = "2.0.14", default-features = false, features = ["ledger"] }
+tokio = { version = "1.41.0", default-features = false, features = ["rt", "rt-multi-thread", "signal", "macros"] }
+num_cpus = "1.16.0"
