@@ -1,13 +1,11 @@
 # Stage 1: Builder
-FROM rust:1.81.0 as builder
+FROM rust:1.82.0 as builder
 
 WORKDIR /usr/src/app
 
 COPY Cargo.toml Cargo.lock ./
 
-RUN mkdir src && echo "fn main() {}" > src/main.rs
-RUN cargo build --release
-RUN rm -rf src
+RUN mkdir src && echo "fn main() {}" > src/main.rs && cargo build --release && rm -rf src && rm -rf target/release/build
 
 COPY . .
 
