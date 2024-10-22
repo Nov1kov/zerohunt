@@ -5,11 +5,9 @@ WORKDIR /usr/src/app
 
 COPY Cargo.toml Cargo.lock ./
 
-RUN mkdir src
-RUN echo "fn main() {}" > src/main.rs
-
+RUN mkdir src && echo "fn main() {}" > src/main.rs
 RUN cargo build --release
-RUN rm -f target/release/deps/app* && rm -r src
+RUN rm -rf src
 
 COPY . .
 
