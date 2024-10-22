@@ -47,7 +47,6 @@ async fn main() {
 
                 let wallet = LocalWallet::new(&mut OsRng);
                 let address = format!("{:?}", wallet.address());
-                let private_key = hex::encode(wallet.signer().to_bytes());
 
                 // Убираем префикс "0x" и подсчитываем количество нулей
                 let address_without_prefix = &address[2..];
@@ -68,6 +67,7 @@ async fn main() {
                         .open("scanned_keys.txt")
                         .expect("Unable to open file");
 
+                    let private_key = hex::encode(wallet.signer().to_bytes());
                     writeln!(
                         file,
                         "{}\t{}\t{}\t{}",
