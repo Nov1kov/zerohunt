@@ -1,6 +1,6 @@
 use std::env;
-use ethers::signers::{LocalWallet, Signer};
-use ethers::utils::hex;
+use ethers::signers::{Signer, Wallet};
+use ethers::utils::{hex, secret_key_to_address};
 use rand::rngs::OsRng;
 use std::fs::OpenOptions;
 use std::io::Write;
@@ -8,6 +8,7 @@ use std::sync::{Arc, Mutex};
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use tokio::task;
 use std::time::{Duration, Instant};
+use ethers::core::k256::ecdsa::SigningKey;
 
 #[tokio::main]
 async fn main() {
@@ -45,17 +46,18 @@ async fn main() {
                     break;
                 }
 
-                let wallet = LocalWallet::new(&mut OsRng);
-                let address = format!("{:?}", wallet.address());
+                let signer = SigningKey::random(&mut OsRng);
+                let address = secret_key_to_address(&signer);
+                let address_str = format!("{:?}", address);
 
                 // Убираем префикс "0x" и подсчитываем количество нулей
-                let address_without_prefix = &address[2..];
-                // performance optimization
+                let address_without_prefix = &address_str[2..];
                 let max_zero_count_value = max_zero_count.load(Ordering::Relaxed);
-                if address_without_prefix.chars().nth(max_zero_count_value) != Some('0') {
-                    total_generated.fetch_add(1, Ordering::SeqCst);
+                if Some(&b'0') != address_without_prefix.as_bytes().get(max_zero_count_value) {
+                    total_generated.fetch_add(1, Ordering::Relaxed);
                     continue;
                 }
+
                 let zero_count = address_without_prefix.chars().take_while(|&c| c == '0').count();
                 if zero_count >= max_zeros {
                     break;
@@ -63,34 +65,34 @@ async fn main() {
 
                 if zero_count > max_zero_count_value {
                     max_zero_count.store(zero_count, Ordering::SeqCst);
-
-                    let mut best_wallet_lock = best_wallet.lock().unwrap();
-                    *best_wallet_lock = Some(wallet.clone());
-
                     let mut file = OpenOptions::new()
                         .create(true)
                         .append(true)
                         .open("scanned_keys.txt")
                         .expect("Unable to open file");
 
+                    let wallet = Wallet::new_with_signer(signer, address, 1);
                     let private_key = hex::encode(wallet.signer().to_bytes());
                     writeln!(
                         file,
                         "{}\t{}\t{}\t{}",
                         total_generated.load(Ordering::Relaxed),
-                        address,
+                        address_str,
                         zero_count,
                         private_key
                     )
                         .expect("Unable to write data to file");
 
+                    let mut best_wallet_lock = best_wallet.lock().unwrap();
+                    *best_wallet_lock = Some(wallet);
+
                     println!(
                         "New best address with {} leading zeros: {}",
-                        zero_count, address
+                        zero_count, address_str
                     );
                 }
 
-                total_generated.fetch_add(1, Ordering::SeqCst);
+                total_generated.fetch_add(1, Ordering::Relaxed);
             }
         });
 
@@ -104,7 +106,7 @@ async fn main() {
         task::spawn(async move {
             loop {
                 tokio::time::sleep(Duration::from_secs(20)).await;
-                let count = total_generated.load(Ordering::SeqCst);
+                let count = total_generated.load(Ordering::Relaxed);
                 let elapsed = start_time.elapsed().as_secs_f64();
                 let rate = count as f64 / elapsed.max(1.0); // Избегаем деления на ноль
 
