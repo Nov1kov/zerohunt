@@ -5,6 +5,7 @@ use rand::rngs::OsRng;
 use std::fs::OpenOptions;
 use std::io::Write;
 use std::sync::{Arc, Mutex};
+use std::sync::atomic::{AtomicUsize, Ordering};
 use tokio::task;
 use std::time::{Duration, Instant};
 
@@ -13,14 +14,13 @@ async fn main() {
     let max_zeros: usize = env::args().nth(1).unwrap_or("8".to_string()).parse().expect("Invalid number");
     let num_threads = num_cpus::get();
     println!("Number of threads: {}\nfinding first wallet with {} leading zeros", num_threads, max_zeros);
-    let scanned_count = Arc::new(Mutex::new(0)); // Счетчик для отслеживания обработанных кошельков
     let max_zero_count = Arc::new(Mutex::new(0)); // Для отслеживания максимального количества нулей
     let best_wallet = Arc::new(Mutex::new(None)); // Для сохранения лучшего кошелька
 
     let mut handles = Vec::new();
 
     let start_time = Instant::now();
-    let total_generated = Arc::new(Mutex::new(0));
+    let total_generated = Arc::new(AtomicUsize::new(0));
 
     let stop_signal = Arc::new(Mutex::new(false)); // Флаг для остановки
     let stop_signal_clone = Arc::clone(&stop_signal);
@@ -35,7 +35,6 @@ async fn main() {
 
 
     for _ in 0..num_threads {
-        let scanned_count = Arc::clone(&scanned_count);
         let max_zero_count = Arc::clone(&max_zero_count);
         let best_wallet = Arc::clone(&best_wallet);
         let total_generated = Arc::clone(&total_generated);
@@ -56,7 +55,7 @@ async fn main() {
                 let zero_count = address_without_prefix.chars().take_while(|&c| c == '0').count();
 
                 let mut max_zero_count_lock = max_zero_count.lock().unwrap();
-                if *max_zero_count_lock > max_zeros {
+                if *max_zero_count_lock >= max_zeros {
                     break;
                 }
                 if zero_count > *max_zero_count_lock {
@@ -74,7 +73,7 @@ async fn main() {
                     writeln!(
                         file,
                         "{}\t{}\t{}\t{}",
-                        *scanned_count.lock().unwrap(),
+                        total_generated.load(Ordering::SeqCst),
                         address,
                         zero_count,
                         private_key
@@ -87,8 +86,7 @@ async fn main() {
                     );
                 }
 
-                *scanned_count.lock().unwrap() += 1;
-                *total_generated.lock().unwrap() += 1; // Увеличиваем общий счетчик
+                total_generated.fetch_add(1, Ordering::SeqCst);
             }
         });
 
@@ -102,7 +100,7 @@ async fn main() {
         task::spawn(async move {
             loop {
                 tokio::time::sleep(Duration::from_secs(20)).await;
-                let count = *total_generated.lock().unwrap();
+                let count = total_generated.load(Ordering::SeqCst);
                 let elapsed = start_time.elapsed().as_secs_f64();
                 let rate = count as f64 / elapsed.max(1.0); // Избегаем деления на ноль
 
