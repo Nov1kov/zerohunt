@@ -5,7 +5,7 @@ use rand::rngs::OsRng;
 use std::fs::OpenOptions;
 use std::io::Write;
 use std::sync::{Arc, Mutex};
-use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use tokio::task;
 use std::time::{Duration, Instant};
 
@@ -14,22 +14,21 @@ async fn main() {
     let max_zeros: usize = env::args().nth(1).unwrap_or("8".to_string()).parse().expect("Invalid number");
     let num_threads = num_cpus::get();
     println!("Number of threads: {}\nfinding first wallet with {} leading zeros", num_threads, max_zeros);
-    let max_zero_count = Arc::new(Mutex::new(0)); // Для отслеживания максимального количества нулей
-    let best_wallet = Arc::new(Mutex::new(None)); // Для сохранения лучшего кошелька
+    let max_zero_count = Arc::new(AtomicUsize::new(0));
+    let best_wallet = Arc::new(Mutex::new(None));
 
     let mut handles = Vec::new();
 
     let start_time = Instant::now();
     let total_generated = Arc::new(AtomicUsize::new(0));
 
-    let stop_signal = Arc::new(Mutex::new(false)); // Флаг для остановки
+    let stop_signal = Arc::new(AtomicBool::new(false));
     let stop_signal_clone = Arc::clone(&stop_signal);
     tokio::spawn(async move {
         tokio::signal::ctrl_c()
             .await
             .expect("Failed to install CTRL+C signal handler");
-        let mut stop_signal = stop_signal_clone.lock().unwrap();
-        *stop_signal = true; // Устанавливаем флаг остановки
+        stop_signal_clone.store(true, Ordering::SeqCst);
         println!("Received Ctrl+C. Stopping...");
     });
 
@@ -42,7 +41,7 @@ async fn main() {
 
         let handle = task::spawn_blocking(move || {
             loop {
-                if *stop_signal.lock().unwrap() {
+                if stop_signal.load(Ordering::Relaxed) {
                     break;
                 }
 
@@ -53,13 +52,12 @@ async fn main() {
                 // Убираем префикс "0x" и подсчитываем количество нулей
                 let address_without_prefix = &address[2..];
                 let zero_count = address_without_prefix.chars().take_while(|&c| c == '0').count();
-
-                let mut max_zero_count_lock = max_zero_count.lock().unwrap();
-                if *max_zero_count_lock >= max_zeros {
+                if zero_count >= max_zeros {
                     break;
                 }
-                if zero_count > *max_zero_count_lock {
-                    *max_zero_count_lock = zero_count;
+                let max_zero_count_value = max_zero_count.load(Ordering::Relaxed);
+                if zero_count > max_zero_count_value {
+                    max_zero_count.store(zero_count, Ordering::SeqCst);
 
                     let mut best_wallet_lock = best_wallet.lock().unwrap();
                     *best_wallet_lock = Some(wallet.clone());
@@ -73,7 +71,7 @@ async fn main() {
                     writeln!(
                         file,
                         "{}\t{}\t{}\t{}",
-                        total_generated.load(Ordering::SeqCst),
+                        total_generated.load(Ordering::Relaxed),
                         address,
                         zero_count,
                         private_key
