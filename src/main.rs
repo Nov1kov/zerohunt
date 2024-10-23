@@ -56,16 +56,18 @@ async fn main() {
 
                 let signer = SigningKey::random(&mut OsRng);
                 let address = secret_key_to_address(&signer);
-                let address_str = format!("{:?}", address);
 
-                let address_without_prefix = &address_str[2..];
                 let max_zero_count_value = max_zero_count.load(Ordering::Relaxed);
-                if address_without_prefix.chars().nth(max_zero_count_value) != Some('0') {
-                    total_generated.fetch_add(1, Ordering::Relaxed);
-                    continue;
+                let mut zero_count = 0;
+                let address_bytes = address.as_bytes();
+                for &byte in &address_bytes[0..] {
+                    if byte == 0 {
+                        zero_count += 2;
+                    } else {
+                        zero_count += byte.leading_zeros() as usize / 4;
+                        break;
+                    }
                 }
-
-                let zero_count = address_without_prefix.chars().take_while(|&c| c == '0').count();
                 if zero_count >= max_zeros {
                     break;
                 }
@@ -80,6 +82,7 @@ async fn main() {
                 let wallet = Wallet::new_with_signer(signer, address, 1);
                 let private_key = hex::encode(wallet.signer().to_bytes());
 
+                let address_str = format!("{:?}", address);
                 {
                     let mut file = file.lock().unwrap();
                     writeln!(
