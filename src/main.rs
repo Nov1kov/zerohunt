@@ -33,12 +33,20 @@ async fn main() {
         println!("Received Ctrl+C. Stopping...");
     });
 
+    let file = Arc::new(Mutex::new(
+        OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open("scanned_keys.txt")
+            .expect("Unable to open file"),
+    ));
 
     for _ in 0..num_threads {
         let max_zero_count = Arc::clone(&max_zero_count);
         let best_wallet = Arc::clone(&best_wallet);
         let total_generated = Arc::clone(&total_generated);
         let stop_signal = Arc::clone(&stop_signal);
+        let file = Arc::clone(&file);
 
         let handle = task::spawn_blocking(move || {
             loop {
@@ -50,7 +58,6 @@ async fn main() {
                 let address = secret_key_to_address(&signer);
                 let address_str = format!("{:?}", address);
 
-                // Убираем префикс "0x" и подсчитываем количество нулей
                 let address_without_prefix = &address_str[2..];
                 let max_zero_count_value = max_zero_count.load(Ordering::Relaxed);
                 if address_without_prefix.chars().nth(max_zero_count_value) != Some('0') {
@@ -69,26 +76,27 @@ async fn main() {
                 }
 
                 max_zero_count.store(zero_count, Ordering::SeqCst);
-                let mut file = OpenOptions::new()
-                    .create(true)
-                    .append(true)
-                    .open("scanned_keys.txt")
-                    .expect("Unable to open file");
 
                 let wallet = Wallet::new_with_signer(signer, address, 1);
                 let private_key = hex::encode(wallet.signer().to_bytes());
-                writeln!(
-                    file,
-                    "{}\t{}\t{}\t{}",
-                    total_generated.load(Ordering::Relaxed),
-                    address_str,
-                    zero_count,
-                    private_key
-                )
-                    .expect("Unable to write data to file");
 
-                let mut best_wallet_lock = best_wallet.lock().unwrap();
-                *best_wallet_lock = Some(wallet);
+                {
+                    let mut file = file.lock().unwrap();
+                    writeln!(
+                        file,
+                        "{}\t{}\t{}\t{}",
+                        total_generated.load(Ordering::Relaxed),
+                        address_str,
+                        zero_count,
+                        private_key
+                    )
+                    .expect("Unable to write data to file");
+                }
+
+                {
+                    let mut best_wallet_lock = best_wallet.lock().unwrap();
+                    *best_wallet_lock = Some(wallet);
+                }
 
                 println!(
                     "New best address with {} leading zeros: {}",
@@ -109,7 +117,7 @@ async fn main() {
                 tokio::time::sleep(Duration::from_secs(20)).await;
                 let count = total_generated.load(Ordering::Relaxed);
                 let elapsed = start_time.elapsed().as_secs_f64();
-                let rate = count as f64 / elapsed.max(1.0); // Избегаем деления на ноль
+                let rate = count as f64 / elapsed.max(1.0);
 
                 println!("Count rate: {:.2} wallets/sec", rate);
             }
