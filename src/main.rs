@@ -53,7 +53,7 @@ async fn main() {
                 // Убираем префикс "0x" и подсчитываем количество нулей
                 let address_without_prefix = &address_str[2..];
                 let max_zero_count_value = max_zero_count.load(Ordering::Relaxed);
-                if Some(&b'0') != address_without_prefix.as_bytes().get(max_zero_count_value) {
+                if address_without_prefix.chars().nth(max_zero_count_value) != Some('0') {
                     total_generated.fetch_add(1, Ordering::Relaxed);
                     continue;
                 }
@@ -63,36 +63,37 @@ async fn main() {
                     break;
                 }
 
-                if zero_count > max_zero_count_value {
-                    max_zero_count.store(zero_count, Ordering::SeqCst);
-                    let mut file = OpenOptions::new()
-                        .create(true)
-                        .append(true)
-                        .open("scanned_keys.txt")
-                        .expect("Unable to open file");
-
-                    let wallet = Wallet::new_with_signer(signer, address, 1);
-                    let private_key = hex::encode(wallet.signer().to_bytes());
-                    writeln!(
-                        file,
-                        "{}\t{}\t{}\t{}",
-                        total_generated.load(Ordering::Relaxed),
-                        address_str,
-                        zero_count,
-                        private_key
-                    )
-                        .expect("Unable to write data to file");
-
-                    let mut best_wallet_lock = best_wallet.lock().unwrap();
-                    *best_wallet_lock = Some(wallet);
-
-                    println!(
-                        "New best address with {} leading zeros: {}",
-                        zero_count, address_str
-                    );
+                if zero_count <= max_zero_count_value {
+                    total_generated.fetch_add(1, Ordering::Relaxed);
+                    continue;
                 }
 
-                total_generated.fetch_add(1, Ordering::Relaxed);
+                max_zero_count.store(zero_count, Ordering::SeqCst);
+                let mut file = OpenOptions::new()
+                    .create(true)
+                    .append(true)
+                    .open("scanned_keys.txt")
+                    .expect("Unable to open file");
+
+                let wallet = Wallet::new_with_signer(signer, address, 1);
+                let private_key = hex::encode(wallet.signer().to_bytes());
+                writeln!(
+                    file,
+                    "{}\t{}\t{}\t{}",
+                    total_generated.load(Ordering::Relaxed),
+                    address_str,
+                    zero_count,
+                    private_key
+                )
+                    .expect("Unable to write data to file");
+
+                let mut best_wallet_lock = best_wallet.lock().unwrap();
+                *best_wallet_lock = Some(wallet);
+
+                println!(
+                    "New best address with {} leading zeros: {}",
+                    zero_count, address_str
+                );
             }
         });
 
