@@ -16,6 +16,7 @@ async fn main() {
     let num_threads = num_cpus::get();
     println!("Number of threads: {}\nfinding first wallet with {} leading zeros", num_threads, max_zeros);
     let max_zero_count = Arc::new(AtomicUsize::new(0));
+    let max_order_chars = Arc::new(AtomicUsize::new(0));
     let best_wallet = Arc::new(Mutex::new(None));
 
     let mut handles = Vec::new();
@@ -43,6 +44,7 @@ async fn main() {
 
     for _ in 0..num_threads {
         let max_zero_count = Arc::clone(&max_zero_count);
+        let max_order_chars = Arc::clone(&max_order_chars);
         let best_wallet = Arc::clone(&best_wallet);
         let total_generated = Arc::clone(&total_generated);
         let stop_signal = Arc::clone(&stop_signal);
@@ -72,17 +74,43 @@ async fn main() {
                     break;
                 }
 
-                if zero_count <= max_zero_count_value {
+                if zero_count < max_zero_count_value {
+                    total_generated.fetch_add(1, Ordering::Relaxed);
+                    continue;
+                }
+
+                let address_str = format!("{:?}", address);
+                let chars_in_order = address_str
+                    .chars()
+                    .skip(zero_count + 2)
+                    .fold((None, 0, 0), |(prev_char, max_count, current_count), c| {
+                        if Some(c) == prev_char {
+                            (prev_char, max_count.max(current_count + 1), current_count + 1)
+                        } else {
+                            (Some(c), max_count.max(current_count), 1)
+                        }
+                    }).1;
+
+                let mex_chars_in_order_value = max_order_chars.load(Ordering::Relaxed);
+                if chars_in_order < mex_chars_in_order_value && zero_count == max_zero_count_value {
                     total_generated.fetch_add(1, Ordering::Relaxed);
                     continue;
                 }
 
                 max_zero_count.store(zero_count, Ordering::SeqCst);
+                // ignore simple addresses
+                if zero_count < 3 {
+                    total_generated.fetch_add(1, Ordering::Relaxed);
+                    continue;
+                }
+
+                if chars_in_order > mex_chars_in_order_value {
+                    max_order_chars.store(chars_in_order, Ordering::SeqCst);
+                }
 
                 let wallet = Wallet::new_with_signer(signer, address, 1);
                 let private_key = hex::encode(wallet.signer().to_bytes());
 
-                let address_str = format!("{:?}", address);
                 {
                     let mut file = file.lock().unwrap();
                     writeln!(
@@ -93,7 +121,7 @@ async fn main() {
                         zero_count,
                         private_key
                     )
-                    .expect("Unable to write data to file");
+                        .expect("Unable to write data to file");
                 }
 
                 {
@@ -102,9 +130,10 @@ async fn main() {
                 }
 
                 println!(
-                    "New best address with {} leading zeros: {}",
-                    zero_count, address_str
+                    "New best address with {} leading zeros and {} chars in order: {}",
+                    zero_count, chars_in_order, address_str
                 );
+                total_generated.fetch_add(1, Ordering::Relaxed);
             }
         });
 
