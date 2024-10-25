@@ -70,9 +70,6 @@ async fn main() {
                         break;
                     }
                 }
-                if zero_count >= max_zeros {
-                    break;
-                }
 
                 if zero_count < max_zero_count_value {
                     total_generated.fetch_add(1, Ordering::Relaxed);
@@ -134,6 +131,10 @@ async fn main() {
                     zero_count, chars_in_order, address_str
                 );
                 total_generated.fetch_add(1, Ordering::Relaxed);
+
+                if zero_count >= max_zeros {
+                    break;
+                }
             }
         });
 
