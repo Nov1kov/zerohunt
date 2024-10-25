@@ -127,7 +127,7 @@ async fn main() {
                 }
 
                 println!(
-                    "New best address with {} leading zeros and {} chars in order: {}",
+                    "New best address with {} leading zeros and {} repeating characters: {}",
                     zero_count, chars_in_order, address_str
                 );
                 total_generated.fetch_add(1, Ordering::Relaxed);
@@ -152,7 +152,7 @@ async fn main() {
                 let elapsed = start_time.elapsed().as_secs_f64();
                 let rate = count as f64 / elapsed.max(1.0);
 
-                println!("Count rate: {:.2} wallets/sec", rate);
+                println!("Wallet generation rate: {:.2} wallets/sec", rate);
             }
         })
     };
