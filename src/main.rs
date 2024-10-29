@@ -13,6 +13,7 @@ use ethers::core::k256::ecdsa::SigningKey;
 use rand::Rng;
 
 
+// factory address from here https://github.com/ZeframLou/create3-factory
 const DEFAULT_FACTORY_ADDRESS: &str = "0x9fBB3DF7C40Da2e5A0dE984fFE2CCB7C47cd0ABf";
 const DEFAULT_PROXY_BYTECODE: &str = "67363d3d37363d34f03d5260086018f3";
 
@@ -81,13 +82,15 @@ impl AddressGenerator for EoaGenerator {
 }
 
 struct Create3Generator {
-    deployer_address: Address,
-    factory_address: Address,
+    deployer_address: [u8; 20],
+    factory_address: [u8; 20],
     proxy_byte_code: Vec<u8>,
 }
 
 impl Create3Generator {
     pub fn new(deployer_address: Address, factory_address: Address, proxy_byte_code: Vec<u8>) -> Self {
+        let deployer_address = deployer_address.to_fixed_bytes();
+        let factory_address = factory_address.to_fixed_bytes();
         Create3Generator {
             deployer_address,
             factory_address,
@@ -99,11 +102,11 @@ impl Create3Generator {
 impl AddressGenerator for Create3Generator {
     fn generate_address(&self) -> (Address, GenerationResult) {
         let salt: [u8; 32] = OsRng.gen();
-        let hashed_salt = keccak256(&[self.deployer_address.as_bytes(), &salt].concat());
+        let hashed_salt = keccak256(&[self.deployer_address.as_ref(), &salt].concat());
 
         let proxy_bytecode_hash = keccak256(&[
             b"\xff",
-            self.factory_address.as_bytes(),
+            self.factory_address.as_ref(),
             &hashed_salt,
             &keccak256(&self.proxy_byte_code),
         ].concat());
@@ -258,7 +261,7 @@ async fn main() {
                 let elapsed = start_time.elapsed().as_secs_f64();
                 let rate = count as f64 / elapsed.max(1.0);
 
-                println!("Address generation rate: {:.2} wallets/sec", rate);
+                println!("Address generation rate: {:.2} address/sec", rate);
             }
         })
     };

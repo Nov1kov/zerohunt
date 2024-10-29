@@ -12,7 +12,7 @@ This script also identifies and saves addresses with **consecutive repeating cha
 git clone https://github.com/Nov1kov/zerohunt.git
 cd zerohunt
 cargo build
-cargo run --release 9
+cargo run --release eoa 9
 ```
 
 a single argument: the **target number of leading zeros**. If not provided, it defaults to **8**.
@@ -20,7 +20,12 @@ a single argument: the **target number of leading zeros**. If not provided, it d
 ### Running with Docker
 ```bash
 docker build -t zero_hunt .
-docker run -d --name zerohunt -v $(pwd):/app zerohunt
+docker run -d --name zerohunt -v $(pwd):/app zerohunt eoa 9
+```
+
+run to find the salt for address with 10 leading zeros 
+```bash
+docker run -d --name zerohunt -v $(pwd):/app zerohunt create3 10 0x0000093849ce47cd01ad266e2d083690601898c9
 ```
 
 ### Example output
@@ -29,8 +34,8 @@ docker run -d --name zerohunt -v $(pwd):/app zerohunt
 New best address with 5 leading zeros and 2 repeating characters: 0x0000093849ce47cd01ad266e2d083690601898c9
 New best address with 5 leading zeros and 3 repeating characters: 0x00000dccc200ac0550fc22cf7ad1821d1ce65b6f
 New best address with 5 leading zeros and 3 repeating characters: 0x00000a65bbd9ab3f1e4ac747dfd9836051666427
-Wallet generation rate: 207941.45 wallets/sec
+Address generation rate: 207941.45 address/sec
 New best address with 6 leading zeros and 2 repeating characters: 0x000000161056f1a577193819fa1d57727b9b6aba
 New best address with 7 leading zeros and 2 repeating characters: 0x0000000fa18ba5fb3516b94187059bae8ffc9675
-Wallet generation rate: 207941.45 wallets/sec
+Address generation rate: 207941.45 address/sec
 ```
