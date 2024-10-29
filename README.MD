@@ -7,15 +7,24 @@ By default, the program will continuously generate Ethereum wallets and output a
 This script also identifies and saves addresses with **consecutive repeating characters** after leading zeros. For example:
 `0x0000...bbbb...`
 
-
+### build
 ```bash
 git clone https://github.com/Nov1kov/zerohunt.git
 cd zerohunt
 cargo build
-cargo run --release eoa 9
 ```
 
+### Find EOA with leading zeros
+```bash
+cargo run --release eoa 9
+```
 a single argument: the **target number of leading zeros**. If not provided, it defaults to **8**.
+
+### Find salt to create smart contract with leading zeros via create3
+```bash
+cargo run --release create3 10 0x0000093849ce47cd01ad266e2d083690601898c9
+```
+two arguments: the **target number of leading zeros** and the **executor EOA** to find the salt for.
 
 ### Running with Docker
 ```bash

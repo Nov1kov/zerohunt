@@ -82,19 +82,18 @@ impl AddressGenerator for EoaGenerator {
 }
 
 struct Create3Generator {
-    deployer_address: [u8; 20],
-    factory_address: [u8; 20],
-    proxy_byte_code: Vec<u8>,
+    deployer_address: Address,
+    factory_address: Address,
+    proxy_byte_code_hash: [u8; 32],
 }
 
 impl Create3Generator {
     pub fn new(deployer_address: Address, factory_address: Address, proxy_byte_code: Vec<u8>) -> Self {
-        let deployer_address = deployer_address.to_fixed_bytes();
-        let factory_address = factory_address.to_fixed_bytes();
+        let proxy_byte_code_hash = keccak256(&proxy_byte_code);
         Create3Generator {
             deployer_address,
             factory_address,
-            proxy_byte_code,
+            proxy_byte_code_hash,
         }
     }
 }
@@ -102,19 +101,19 @@ impl Create3Generator {
 impl AddressGenerator for Create3Generator {
     fn generate_address(&self) -> (Address, GenerationResult) {
         let salt: [u8; 32] = OsRng.gen();
-        let hashed_salt = keccak256(&[self.deployer_address.as_ref(), &salt].concat());
+        let hashed_salt = keccak256(&[self.deployer_address.as_bytes(), &salt].concat());
 
         let proxy_bytecode_hash = keccak256(&[
             b"\xff",
-            self.factory_address.as_ref(),
+            self.factory_address.as_bytes(),
             &hashed_salt,
-            &keccak256(&self.proxy_byte_code),
+            &self.proxy_byte_code_hash,
         ].concat());
 
         let proxy_address = &proxy_bytecode_hash[12..32];
 
 
-        let deployed_address_hash = keccak256(&[b"\xd6\x94", proxy_address, &[0x01]].concat());
+        let deployed_address_hash = keccak256(&[b"\xd6\x94", proxy_address, b"\x01"].concat());
         let deployed_address = Address::from_slice(&deployed_address_hash[12..32]);
         (deployed_address, GenerationResult::Create3 { salt: salt.to_vec() })
     }
