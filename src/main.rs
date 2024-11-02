@@ -203,12 +203,16 @@ async fn main() {
                     }).1;
 
                 let mex_chars_in_order_value = max_order_chars.load(Ordering::Relaxed);
-                if chars_in_order < mex_chars_in_order_value && zero_count == max_zero_count_value {
+                if chars_in_order <= mex_chars_in_order_value && zero_count == max_zero_count_value {
                     total_generated.fetch_add(1, Ordering::Relaxed);
                     continue;
                 }
 
-                max_zero_count.store(zero_count, Ordering::SeqCst);
+                if zero_count > max_zero_count_value {
+                    max_zero_count.store(zero_count, Ordering::SeqCst);
+                    max_order_chars.store(chars_in_order, Ordering::SeqCst);
+                }
+
                 // ignore simple addresses
                 if zero_count < 3 {
                     total_generated.fetch_add(1, Ordering::Relaxed);
